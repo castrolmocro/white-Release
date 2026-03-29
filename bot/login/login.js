@@ -809,6 +809,7 @@ async function startBot(_0x3cad9e) {
         }
         global.responseUptimeCurrent = responseUptimeSuccess;
         global.statusAccountBot = "good";
+        global.lastMqttActivity = Date.now();
         const _0x40b7b6 = global.GoatBot.config.logEvents;
         if (_0x54729a == true) {
           _0x54729a = false;
@@ -909,24 +910,42 @@ async function startBot(_0x3cad9e) {
           log.info("BOT_STARTED", getText("login", "startBotSuccess"));
           logColor("#f5ab00", character);
         }
-        const _0x4091cc = setInterval(async function () {
+        function _0x6b2e1f() {
+          const _base = _0x1c9406.timeRestart || 300000;
+          const _jPct = _0x1c9406.jitterPercent !== undefined ? _0x1c9406.jitterPercent : 20;
+          const _delta = Math.floor(_base * (_jPct / 100));
+          return _base - _delta + Math.floor(Math.random() * (_delta * 2 + 1));
+        }
+        let _0x4091cc = null;
+        async function _0x7ac3d0() {
           if (_0x1c9406.enable == false) {
-            clearInterval(_0x4091cc);
             return log.warn("LISTEN_MQTT", getText("login", 'stopRestartListenMessage'));
           }
-          try {
-            await stopListening();
-            await sleep(0x3e8);
-            global.GoatBot.Listening = _0x4d5048.listenMqtt(_0xb703d8());
-            log.info('LISTEN_MQTT', getText('login', 'restartListenMessage2'));
-          } catch (_0x5e1259) {
-            log.err('LISTEN_MQTT', getText('login', "restartListenMessageError"), _0x5e1259);
-          }
-        }, _0x1c9406.timeRestart);
-        global.intervalRestartListenMqtt = _0x4091cc;
+          const _delay = _0x6b2e1f();
+          _0x4091cc = setTimeout(async function () {
+            global.intervalRestartListenMqtt = _0x4091cc;
+            if (_0x1c9406.enable == false) {
+              return log.warn("LISTEN_MQTT", getText("login", 'stopRestartListenMessage'));
+            }
+            try {
+              await stopListening();
+              const _reconnectJitter = Math.floor(Math.random() * 2000);
+              await sleep((_0x1c9406.delayAfterStopListening || 1000) + _reconnectJitter);
+              global.GoatBot.Listening = _0x4d5048.listenMqtt(_0xb703d8());
+              global.lastMqttActivity = Date.now();
+              log.info('LISTEN_MQTT', getText('login', 'restartListenMessage2'));
+            } catch (_0x5e1259) {
+              log.err('LISTEN_MQTT', getText('login', "restartListenMessageError"), _0x5e1259);
+            }
+            _0x7ac3d0();
+          }, _delay);
+          global.intervalRestartListenMqtt = _0x4091cc;
+        }
+        _0x7ac3d0();
       }
       require("../autoUptime.js");
       require("../keepAlive")();
+      require("../mqttHealthCheck").startHealthCheck();
     });
   })(_0x372cb5);
   if (global.GoatBot.config.autoReloginWhenChangeAccount) {
