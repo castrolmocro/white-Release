@@ -102,9 +102,21 @@
   "restartListenMqtt": {
     "enable": true,
     "timeRestart": 300000,
+    "jitterPercent": 20,
     "delayAfterStopListening": 2000,
     "logNoti": true,
-    "notes": "Restart listener every 5 minutes."
+    "notes": "Restart listener around every 5 min. jitterPercent=20 means actual delay is 4–6 min (randomized to avoid detection)."
+  },
+  "mqttHealthCheck": {
+    "enable": true,
+    "silentTimeoutMinutes": 10,
+    "checkIntervalMinMinutes": 2,
+    "checkIntervalMaxMinutes": 5,
+    "maxRestarts": 5,
+    "backoffMultiplier": 1.5,
+    "maxBackoffMinutes": 15,
+    "notifyAdmins": true,
+    "notes": "Checks every 2–5 min (randomized). Restarts MQTT if silent for silentTimeoutMinutes. Uses exponential backoff on repeated failures."
   },
   "notiWhenListenMqttError": {
     "notes": "Notification settings when MQTT stops listening.",
