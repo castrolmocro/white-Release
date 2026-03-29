@@ -35,6 +35,7 @@ async function doPing() {
     });
 
     global.utils.log.info("KEEP_ALIVE", "✅ Ping sent — account stays active");
+    global.lastMqttActivity = global.lastMqttActivity || Date.now();
   } catch (e) {
     global.utils.log.warn("KEEP_ALIVE", "⚠️ Ping failed: " + (e.message || e));
   }
