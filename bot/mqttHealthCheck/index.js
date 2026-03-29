@@ -52,6 +52,11 @@ async function doHealthCheck() {
     return scheduleNextCheck();
   }
 
+  if (global.isRelogining) {
+    global.utils?.log?.info?.("MQTT_HEALTH", "Relogin already in progress — skipping health check restart.");
+    return scheduleNextCheck();
+  }
+
   if (restartCount >= cfg.maxRestarts) {
     global.utils?.log?.err?.("MQTT_HEALTH", `Max restarts (${cfg.maxRestarts}) reached. Stopping health check.`);
     stopHealthCheck();
