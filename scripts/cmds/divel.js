@@ -61,8 +61,8 @@ module.exports = {
   config: {
     name: "divel",
     aliases: ["devil", "ديفل"],
-    version: "1.0",
-    author: "Saint",
+    version: "1.1",
+    author: "Djamel",
     countDown: 3,
     role: 0,
     shortDescription: "يراقب الغروب ويرد بعد N دقيقة من آخر رسالة",
@@ -81,6 +81,43 @@ module.exports = {
     }
   },
 
+  // ─── يُستدعى عند كل رسالة في أي غروب ────────────────────────────────────────
+  onChat: async function ({ api, event }) {
+    const { threadID, senderID, type } = event;
+
+    // فقط للرسائل (بما فيها الصامت) وليس لأحداث غيرها
+    if (type !== "message" && type !== "message_reply") return;
+
+    // تجاهل رسائل البوت نفسه
+    try {
+      const botID = api.getCurrentUserID();
+      if (String(senderID) === String(botID)) return;
+    } catch (_) {}
+
+    restoreWatchers();
+
+    const watcher = global.GoatBot.divelWatchers[threadID];
+    if (!watcher || !watcher.active) return;
+
+    // إعادة ضبط المؤقت (debounce)
+    if (watcher.timer) {
+      clearTimeout(watcher.timer);
+      watcher.timer = null;
+    }
+
+    const ms = (watcher.waitMinutes || 5) * 60 * 1000;
+
+    watcher.timer = setTimeout(async () => {
+      watcher.timer = null;
+      try {
+        await api.sendMessage(watcher.message, threadID);
+      } catch (err) {
+        global.utils?.log?.err?.("DIVEL", "Failed to send message", err);
+      }
+    }, ms);
+  },
+
+  // ─── أوامر الإعداد ────────────────────────────────────────────────────────
   onStart: async function ({ api, event, args, message }) {
     const { senderID, threadID } = event;
 
@@ -127,7 +164,6 @@ module.exports = {
         const watcher = global.GoatBot.divelWatchers[threadID];
         if (watcher) {
           watcher.waitMinutes = mins;
-          // إيقاف المؤقت الحالي حتى يُحسب من أول رسالة جديدة
           if (watcher.timer) {
             clearTimeout(watcher.timer);
             watcher.timer = null;
@@ -162,7 +198,7 @@ module.exports = {
         };
 
         return message.reply(
-          `✅ تم تفعيل Divel! 😈\n\n`
+          `✅ تم تفعيل Divel! \n\n`
           + `📝 الرسالة: "${td.message}"\n`
           + `⏱️ الانتظار: ${td.waitMinutes} دقيقة بعد آخر رسالة\n\n`
           + `👁️ يراقب المحادثة الآن...`
@@ -213,7 +249,6 @@ module.exports = {
           + "/divel change \n"
           + "/divel time 5\n"
           + "/divel on\n\n"
-          + "📌 ."
         );
       }
     }
