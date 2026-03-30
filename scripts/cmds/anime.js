@@ -6,7 +6,7 @@ const ytSearch = require("yt-search");
 
 const JIKAN = "https://api.jikan.moe/v4";
 const TMP_DIR = path.join(process.cwd(), "scripts/cmds/tmp");
-const MAX_MB = 700;
+const MAX_MB = 1024;
 
 fs.ensureDirSync(TMP_DIR);
 
@@ -117,18 +117,22 @@ async function findYouTubeVideo(queries, epNum) {
 }
 
 // ─── Download via sagor-video-downloader ─────────────────────────────────────
+// Preserves the original file extension (may be .webm, .mkv, .mp4, etc.)
 
-async function downloadYouTube(ytUrl, outFile) {
+async function downloadYouTube(ytUrl) {
   const { downloadVideo } = require("sagor-video-downloader");
+  console.log(`[anime] ⬇️ downloadVideo: ${ytUrl}`);
   const result = await downloadVideo(ytUrl);
-  if (!result?.filePath || !fs.existsSync(result.filePath)) {
-    throw new Error("sagor-video-downloader: no file returned");
+  if (!result?.filePath) throw new Error("sagor-video-downloader: no filePath returned");
+  if (!fs.existsSync(result.filePath)) throw new Error(`sagor-video-downloader: file not found: ${result.filePath}`);
+
+  // Move to TMP_DIR while keeping the original filename + extension
+  const safePath = path.join(TMP_DIR, path.basename(result.filePath));
+  if (result.filePath !== safePath) {
+    fs.moveSync(result.filePath, safePath, { overwrite: true });
   }
-  // Move to our expected output path
-  if (result.filePath !== outFile) {
-    fs.moveSync(result.filePath, outFile, { overwrite: true });
-  }
-  return outFile;
+  console.log(`[anime] 📁 saved: ${safePath} (${(fs.statSync(safePath).size / 1048576).toFixed(1)} MB)`);
+  return safePath;
 }
 
 // ─── Consumet API fallback ────────────────────────────────────────────────────
@@ -199,6 +203,7 @@ async function tryConsumetGogoanime(titles, epNum, outFile) {
 // ─── Main fetchEpisode ────────────────────────────────────────────────────────
 
 async function fetchEpisode(animeTitle, epNum, seasonTitle, animeMeta, onProgress) {
+  // outFile used only for ffmpeg-based sources (consumet). YouTube uses its own path.
   const outFile = path.join(TMP_DIR, `anime_${Date.now()}_ep${epNum}.mp4`);
 
   // Build search title list from Jikan metadata
@@ -214,7 +219,6 @@ async function fetchEpisode(animeTitle, epNum, seasonTitle, animeMeta, onProgres
   console.log(`[anime] base="${baseTitle}"`);
 
   // ── Source 1: YouTube Arabic sub ─────────────────────────────────────────
-  if (fs.existsSync(outFile)) fs.unlinkSync(outFile);
   try {
     const ytQueries = [
       `${baseTitle} episode ${epNum} arabic sub مترجم عربي`,
@@ -223,20 +227,19 @@ async function fetchEpisode(animeTitle, epNum, seasonTitle, animeMeta, onProgres
     ];
     const yt = await findYouTubeVideo(ytQueries, epNum);
     if (yt) {
-      console.log(`[anime] ⬇️ يوتيوب (عربي): ${yt.url}`);
-      await downloadYouTube(yt.url, outFile);
-      const mb = checkFile(outFile);
+      const filePath = await downloadYouTube(yt.url);
+      const mb = checkFile(filePath);
       if (mb) {
-        console.log(`[anime] ✅ نجح YouTube Arabic: ${mb.toFixed(1)} MB`);
-        return { filePath: outFile, sizeMB: mb, source: "YouTube 📺 (عربي)" };
+        console.log(`[anime] ✅ نجح YouTube Arabic: ${mb.toFixed(1)} MB | ${filePath}`);
+        return { filePath, sizeMB: mb, source: "YouTube 📺 (عربي)" };
       }
+      if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
     }
   } catch (e) {
     console.log(`[anime] ❌ YouTube Arabic: ${e.message?.slice(0, 80)}`);
   }
 
   // ── Source 2: YouTube English sub ────────────────────────────────────────
-  if (fs.existsSync(outFile)) fs.unlinkSync(outFile);
   try {
     const ytQueries = [
       `${baseTitle} episode ${epNum} english sub`,
@@ -245,13 +248,13 @@ async function fetchEpisode(animeTitle, epNum, seasonTitle, animeMeta, onProgres
     ];
     const yt = await findYouTubeVideo(ytQueries, epNum);
     if (yt) {
-      console.log(`[anime] ⬇️ يوتيوب (English): ${yt.url}`);
-      await downloadYouTube(yt.url, outFile);
-      const mb = checkFile(outFile);
+      const filePath = await downloadYouTube(yt.url);
+      const mb = checkFile(filePath);
       if (mb) {
-        console.log(`[anime] ✅ نجح YouTube EN: ${mb.toFixed(1)} MB`);
-        return { filePath: outFile, sizeMB: mb, source: "YouTube 📺 (إنجليزي)" };
+        console.log(`[anime] ✅ نجح YouTube EN: ${mb.toFixed(1)} MB | ${filePath}`);
+        return { filePath, sizeMB: mb, source: "YouTube 📺 (إنجليزي)" };
       }
+      if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
     }
   } catch (e) {
     console.log(`[anime] ❌ YouTube English: ${e.message?.slice(0, 80)}`);
