@@ -37,7 +37,7 @@ function isBotAdmin(senderID) {
 module.exports = {
   config: {
     name: "lock",
-    version: "4.0",
+    version: "4.1",
     author: "MOHAMMAD AKASH | Modified",
     countDown: 5,
     role: 1,
@@ -45,7 +45,7 @@ module.exports = {
     category: "box chat",
   },
 
-  onStart: async function ({ api, event, args }) {
+  onStart: async function ({ api, event, args, threadsData }) {
     const { threadID, senderID } = event;
 
     const info = await api.getThreadInfo(threadID);
@@ -66,6 +66,12 @@ module.exports = {
 
       lockedThreads[threadID] = true;
       saveLockData(lockedThreads);
+
+      // إخفاء رسالة "command not found" في هذا الغروب
+      try {
+        await threadsData.set(threadID, { commandNotFound: true }, "settings.hideNotiMessage");
+      } catch (_) {}
+
       return api.sendMessage(
         "🔒 Group locked!\nOnly bot admins can send messages now.\nAll other messages will be deleted automatically.",
         threadID
@@ -78,6 +84,12 @@ module.exports = {
 
       delete lockedThreads[threadID];
       saveLockData(lockedThreads);
+
+      // إعادة رسالة "command not found" في هذا الغروب
+      try {
+        await threadsData.set(threadID, {}, "settings.hideNotiMessage");
+      } catch (_) {}
+
       return api.sendMessage(
         "🔓 Group unlocked!\nEveryone can send messages again.",
         threadID
