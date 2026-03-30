@@ -187,6 +187,7 @@ async function extractDoodstream(url, ref) {
     const embedUrl = `https://doodstream.com/e/${id}`;
     console.log(`[anime] 🎬 doodstream embed: ${embedUrl}`);
     const r = await axios.get(embedUrl, { headers: { ...UA, Referer: ref }, timeout: 12000 });
+    console.log(`[anime] 🔬 doodstream HTML[0:300]: ${r.data.slice(0, 300).replace(/\s+/g, " ")}`);
     const passPath = r.data.match(/\/pass_md5\/[^'"?\s]+/)?.[0];
     if (!passPath) { console.log(`[anime] ⚠️ doodstream: لم أجد pass_md5`); return null; }
     const passRes = await axios.get(`https://doodstream.com${passPath}`, {
@@ -224,12 +225,22 @@ async function extractMp4upload(embedId, ref) {
     const r = await axios.get(`https://www.mp4upload.com/embed-${embedId}.html`, {
       headers: { ...UA, Referer: ref }, timeout: 15000
     });
-    // Multiple patterns — mp4upload URL doesn't always end in .mp4
+    // Debug: show first 400 chars of response to understand page structure
+    console.log(`[anime] 🔬 mp4upload HTML[0:400]: ${r.data.slice(0, 400).replace(/\s+/g, " ")}`);
+
+    // Multiple patterns — try all known mp4upload formats
     const src = r.data.match(/"file"\s*:\s*"(https?:\/\/[^"]{10,})"/)?.[1]
              || r.data.match(/'file'\s*:\s*'(https?:\/\/[^']{10,})'/)?.[1]
              || r.data.match(/https?:\/\/storage\.mp4upload\.com[^\s"'<>\\]*/)?.[0]
-             || r.data.match(/https?:\/\/[^"'\s<>]*mp4upload[^"'\s<>]*\.mp4[^"'\s<>]*/)?.[0];
-    if (!src) { console.log(`[anime] ⚠️ mp4upload: لم أجد رابط الفيديو`); return null; }
+             || r.data.match(/https?:\/\/[^"'\s<>]*mp4upload[^"'\s<>]*\.mp4[^"'\s<>]*/)?.[0]
+             || r.data.match(/sources\s*:\s*\[\s*\{[^}]*(?:src|file)\s*:\s*["'](https?:\/\/[^"']{10,})["']/)?.[1]
+             || r.data.match(/(?:src|file)\s*=\s*["'](https?:\/\/[^"']{10,}\.mp4[^"']*)/)?.[1];
+    if (!src) {
+      // Show all https URLs found in page for manual diagnosis
+      const allUrls = (r.data.match(/https?:\/\/[^\s"'<>\\]{15,}/g) || []).slice(0, 5);
+      console.log(`[anime] ⚠️ mp4upload: لم أجد رابط. URLs موجودة: ${allUrls.join(" | ")}`);
+      return null;
+    }
     console.log(`[anime] ✅ mp4upload src → ${src.slice(0, 80)}`);
     return { url: src, type: "direct" };
   } catch (e) { console.log(`[anime] ❌ mp4upload: ${e.message?.slice(0, 50)}`); return null; }
@@ -620,9 +631,9 @@ async function fetchEpisode(animeTitle, epNum, seasonTitle, animeMeta, onProgres
   console.log(`[anime] title="${animeTitle}" season="${seasonTitle}" ep=${epNum}`);
   console.log(`[anime] slugs=[${slugCandidates.join(", ")}]`);
 
+  // Note: tryShahiid removed — site uses JS-rendered episode pages, no usable links in static HTML
   const sources = [
     () => tryAnimelek(slugCandidates, epNum, outFile, onProgress),
-    () => tryShahiid(titles, epNum, outFile, onProgress),
     () => tryAnimelekSearch(titles, epNum, outFile, onProgress)
   ];
 
